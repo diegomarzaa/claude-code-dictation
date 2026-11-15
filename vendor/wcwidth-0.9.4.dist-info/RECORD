@@ -3,7 +3,6 @@ wcwidth/_clip.py,sha256=zlAEKcNo7jA9EiCdxOQA3lnujKa9YVVrTgHn8GTndtU,37096
 wcwidth/_constants.py,sha256=BEJfBbzkGXusg3u7QMB-EOBw2iH8HdOcKL4PYFJCWmg,6414
 wcwidth/_wcswidth.py,sha256=Z08UIPzmEUsCt-Nx_FdMRVN3bvpbewmC31_K75PkC04,17687
 wcwidth/_wcwidth.py,sha256=2Q4BYg1LrLIxzBVYTNIMNvNr0QhIlNk8XibuwG_A5og,6757
-wcwidth/_wcwidth_c.abi3.so,sha256=jpXX-Hor-rxfjBRMduWtH9B4KT00tsS_IbDPVV10IEE,1934608
 wcwidth/_wcwidth_c.pyi,sha256=59-9yYLomzTe080FXVGpwH9Vx4-EQK8cQDBqDFEZ9Ds,2150
 wcwidth/_width.py,sha256=R3KvRNm8CoPdmiYMy7lkFElze7JArK95nDoGcufvzKI,22870
 wcwidth/align.py,sha256=pWOxT5opfKcdEdUgLwpJYYOE2GqsnnYhHI2DO5X5mlc,9604

@@ -1,67 +1,87 @@
-# Dictado global con Claude Code · Ubuntu X11
+# Claude Code Dictation
 
-Puente independiente para el cliente oficial. Mantén **Ctrl+Alt+J**, habla y suelta para pegar. **Esc** cancela durante la grabación o el procesamiento. No pulsa Enter en la aplicación receptora.
+Dictado global para Linux X11 usando el reconocimiento de voz de **Claude Code**. Mantén **Ctrl+Alt+J**, habla y suelta para pegar el resultado en la aplicación activa. **Esc** cancela.
 
-## Uso
+El reconocimiento lo realiza Anthropic en la nube. Este proyecto controla el cliente oficial y recoge la transcripción; no incluye un modelo de voz local ni necesita una API de pago por uso. Proyecto independiente, sin afiliación con Anthropic.
 
-Desde esta carpeta:
+## Requisitos
 
-```sh
-./start.sh                         # español, pega al terminar
-./stop.sh                          # detener desde otra terminal
-./start.sh --language english      # inglés
-./start.sh --live                  # vista previa flotante en directo
-./start.sh --key u                 # Ctrl+Alt+U
-./dictate.py status
-./dictate.py cancel
-```
+- **Sesión gráfica X11** con acceso al micrófono e Internet. Probado en Ubuntu 24.04 y GNOME X11. No admite Wayland, Windows, macOS ni ejecución remota por SSH.
+- **Claude Code instalado y autenticado con una cuenta Claude.ai que tenga acceso a `/voice`**. Primero comprueba el dictado en el propio cliente. Versión probada: **2.1.325**; otras versiones pueden cambiar la interfaz o las opciones necesarias.
+- **Python 3.10 o posterior**, con **Tkinter**.
+- **`xclip`, `xprop`, libX11 y libXtst**.
+- Una aplicación que acepte pegar con **Ctrl+V** o **Ctrl+Shift+V**. No se ha comprobado compatibilidad con todas las aplicaciones.
 
-Puedes arrancarlo tú directamente desde cualquier terminal, sin Codex ni este chat:
+Dependencias en Ubuntu/Debian:
 
 ```sh
-~/Documents/Github/Professional/claude-code-dictation/start.sh
+sudo apt install git python3 python3-tk xclip x11-utils libx11-6 libxtst6 alsa-utils
 ```
 
-Para pararlo, pulsa **Ctrl+C** en esa terminal o ejecuta `stop.sh` desde otra. Deja abierto el proceso de `start.sh`. No se ha instalado ningún servicio ni inicio automático. Solo registra su atajo mientras está ejecutándose; si está ocupado, se niega a arrancar. No cambia atajos de GNOME ni nada de Vocalinux. Para volver al comportamiento anterior basta detenerlo.
+`alsa-utils` proporciona `arecord`, una alternativa de captura que Claude puede necesitar. Las dependencias Python `pyte` y `wcwidth` están incluidas en `vendor`; no hace falta ejecutar `pip`.
 
-La clase de la ventana determina si pega con Ctrl+V o Ctrl+Shift+V. En terminales integradas que no detecte automáticamente, usa `--terminal`. Conserva texto del portapapeles cuando puede; no conserva formatos enriquecidos ni imágenes. La ventana y el cursor deben mantenerse en el mismo campo durante todo el dictado. Si cambia el foco de X11, deja de insertar y guarda el resultado en `state/last.txt`.
+Instala y autentica Claude siguiendo su [documentación oficial](https://code.claude.com/docs/en/setup). Ejecuta `claude`, completa el inicio de sesión y prueba `/voice` antes de continuar. El puente utiliza el archivo de credenciales del perfil local; no implementa otros almacenes de autenticación.
 
-## Indicadores de estado
+## Inicio rápido
 
-El modo normal también muestra un indicador flotante: «Escuchando…» mientras mantienes el atajo, «Procesando…» al soltar y «Texto pegado» al terminar. También indica cancelación, ausencia de voz o error de pegado. Los avisos de fin desaparecen solos. El indicador no toma el foco ni inserta mensajes temporales en el campo de texto.
+```sh
+git clone https://github.com/diegomarzaa/claude-code-dictation.git
+cd claude-code-dictation
+./start.sh
+```
 
-Estos indicadores nuevos aún no se han probado visualmente. Inicia `start.sh` para cargar esta versión.
+Espera al mensaje **Listo**, coloca el cursor en un campo de texto y mantén **Ctrl+Alt+J** mientras hablas. Suelta para terminar y pegar. Aparecerán indicadores de escucha, procesamiento y fin.
 
-## Vista previa en directo
+Deja la terminal del puente abierta. Para detenerlo, pulsa **Ctrl+C** en ella o ejecuta `./stop.sh` desde otra terminal, dentro de la misma carpeta. El arranque es manual; no se instala ningún servicio ni se necesita un asistente de IA para ejecutarlo.
 
-`--live` muestra el texto provisional en una ventana flotante, sin tomar el foco, mientras hablas. Solo pega el resultado final al soltar el atajo, igual que el modo normal. Esc cancela y oculta la vista previa. No envía retrocesos, no reemplaza fragmentos provisionales y no escribe durante la grabación en el editor receptor.
+## Opciones
 
-La antigua inserción progresiva dentro del editor fue retirada tras un borrado de texto durante una prueba real. No podía verificar la posición del cursor ni los modificadores mientras corregía texto. El nuevo `--live` es una vista previa, no inserción progresiva dentro de la aplicación.
+```sh
+./start.sh --language english      # español por defecto
+./start.sh --live                  # vista previa flotante del texto provisional
+./start.sh --key u                 # cambia el atajo a Ctrl+Alt+U
+./start.sh --terminal              # fuerza el pegado con Ctrl+Shift+V
+./start.sh --claude ./bin/claude    # ejecutable alternativo
+./start.sh --claude-config "$HOME/.claude-work"  # perfil alternativo
+python3 dictate.py status
+python3 dictate.py cancel
+```
 
-El lector sigue dependiendo de la pantalla de Claude en una PTY. La nueva vista previa aún no se ha probado con audio real. El modo normal sí ha funcionado en las pruebas de Diego. Mantén el cursor en el campo de destino para el pegado final. Como al pegar manualmente, una selección activa será reemplazada por el resultado final.
+Claude se busca en `PATH`; también se puede indicar mediante `CLAUDE_BIN`. El perfil se obtiene de `--claude-config`, `CLAUDE_CONFIG_DIR` o, por defecto, `~/.claude`.
 
-## Aislamiento y cuenta
+Si utilizas un entorno Python sin Tkinter, selecciona un intérprete que lo incluya mediante `PYTHON` al arrancar y parar. Por ejemplo, `PYTHON=python3.12 ./start.sh`. La carpeta del proyecto se puede mover; sus rutas se calculan al arrancar. Detén el proceso antes de moverla.
 
-- Arranca `~/.local/bin/claude` en una PTY dedicada, sin herramientas, skills ni servidores MCP de usuario/proyecto.
-- Usa `state/profile` como `CLAUDE_CONFIG_DIR`, con enlace al archivo de credenciales existente. No muestra ni copia el token y no configura una API de pago.
-- Solo copia los metadatos de onboarding y cuenta necesarios al perfil aislado. Claude puede renovar sus propias credenciales de la manera habitual.
-- Usa opciones de voz e idioma en `state/settings.json`; no edita la configuración habitual de Claude.
-- Un hook `UserPromptSubmit` captura el texto y responde `continue:false`; si falla, `onFailure:block` impide que el prompt siga al modelo. Diego ha confirmado que el modo de pegado final funciona con voz real.
-- Claude puede solicitar un título de sesión en segundo plano con Haiku; no se promete ausencia absoluta de llamadas auxiliares del cliente. La transcripción en sí está incluida en la cuenta según la documentación oficial.
-- El audio lo procesa Anthropic. No se graba audio en archivos por parte del puente. Claude puede guardar su historial en el perfil aislado y el resultado final queda en `state/last.txt`. `state` tiene permisos 0700; no lo compartas.
+`--live` muestra texto provisional **en una ventana flotante** y pega solo el resultado final. No escribe ni corrige texto dentro del editor mientras hablas. El modo normal muestra únicamente los indicadores de estado.
 
-## Estado al 15/11/2026
+## Cómo funciona
 
-Claude Code 2.1.325 arranca con Claude Pro en el perfil aislado. Diego ha confirmado que el modo normal transcribe y pega correctamente. La nueva vista previa flotante no se ha probado aún con micrófono real; se han comprobado las restricciones que impiden borrar texto mediante retrocesos. El arranque es manual; no se instala ningún servicio.
+1. El puente arranca Claude en una **PTY**, una terminal controlada por código y sin ventana propia.
+2. El atajo envía pulsaciones a Claude para iniciar y terminar el dictado. **Claude captura el audio, lo envía a Anthropic y recibe la transcripción**; el audio no pasa por la PTY.
+3. Un hook `UserPromptSubmit` entrega el texto final al puente por un socket local y responde `continue:false`. Si el hook falla, `onFailure:block` impide continuar con ese mensaje.
+4. El puente pega el texto en la ventana de destino, sin enviar Enter a esa aplicación. La vista previa opcional lee el campo de entrada de la terminal mediante `pyte`.
 
-Claude limita las grabaciones a dos minutos y puede pararlas tras quince segundos de silencio. El puente intenta enviar con Enter los resultados cortos que tap mode deja sin enviar; esa detección depende de la interfaz y permanece sin probar. Se evitan Ctrl+Alt+F1…F12 porque Linux los reserva para cambiar de consola virtual. El servicio admite español e inglés seleccionados por sesión; la calidad al mezclarlos no está comprobada.
+## Cuenta y datos
 
-## Fuentes y dependencias
+- La instancia usa su propia configuración y perfiles en `state/`, con herramientas, skills y servidores MCP desactivados mediante las opciones de arranque. Los perfiles aislados enlazan el archivo de credenciales existente; el cliente puede renovar esas credenciales.
+- El puente no configura facturación por API. Según la [documentación de voz](https://code.claude.com/docs/en/voice-dictation), la transcripción no consume mensajes ni tokens de Claude. El cliente puede hacer llamadas auxiliares, como generar un título de sesión.
+- El audio se procesa en los servidores de Anthropic. El puente no guarda archivos de audio; sí guarda el último texto en `state/last.txt`, y Claude puede guardar historial en sus perfiles aislados.
+- `state/` es privado para el usuario del sistema y está excluido de Git. No compartas esa carpeta. Detén el puente antes de eliminarla para borrar su estado local; los datos de Anthropic se rigen por su política de uso de datos.
 
-Consultadas el 15/11/2026:
+## Límites y resolución de problemas
 
-- [Voz oficial](https://code.claude.com/docs/en/voice-dictation)
-- [Hooks oficiales](https://code.claude.com/docs/en/hooks)
-- [Antecedente Windows](https://github.com/android6/claude-dictate): referencia del patrón de captura con hook; implementación de este puente independiente.
+- **Mantén el cursor en el campo de destino.** Si cambia el foco de X11, el puente omite el pegado. Una selección activa se reemplaza al pegar, como en un pegado manual; no puede detectar todos los movimientos dentro de una misma ventana.
+- El portapapeles solo se restaura como texto cuando es posible; no conserva imágenes ni formatos enriquecidos. Los saltos de línea del dictado se convierten en espacios.
+- Si el atajo está ocupado, el programa se niega a registrarlo. Usa `--key` para elegir otro; se rechazan Ctrl+Alt+F1…F12 porque cambian de consola virtual en Linux.
+- Si una terminal integrada no recibe el texto, prueba `--terminal`. La detección automática de terminales se basa en la clase de la ventana.
+- Si no se reconoce voz, comprueba primero `/voice` en Claude. Las grabaciones tienen los límites del cliente: hasta dos minutos y parada tras quince segundos de silencio.
+- La detección de fin y el envío de frases cortas dependen de la interfaz de Claude. Actualizar el cliente puede requerir adaptar este puente.
 
-Incluye pyte 0.8.2 y wcwidth 0.9.4 en `vendor`, con sus licencias. Requiere Python 3 del sistema, libX11, libXtst, xclip y xprop, presentes en esta máquina. Requiere GNOME X11; no implementa Wayland.
+**Estado de validación:** el dictado con pegado final se ha probado con voz real en Ubuntu 24.04, GNOME X11 y Claude Code 2.1.325. Los indicadores gráficos nuevos, la vista previa y los cambios de portabilidad aún no se han validado de extremo a extremo. No se garantiza funcionamiento en otras combinaciones.
+
+## Licencia y referencias
+
+Código del puente bajo [licencia MIT](LICENSE). Las dependencias conservan sus propias licencias; consulta [THIRD_PARTY.md](THIRD_PARTY.md).
+
+El patrón de instancia dedicada y captura mediante hook se inspira en [android6/claude-dictate](https://github.com/android6/claude-dictate), una implementación para Windows. Este puente tiene implementación propia para Linux.
+
+Fuentes oficiales, consultadas el 15/11/2026: [dictado](https://code.claude.com/docs/en/voice-dictation), [hooks](https://code.claude.com/docs/en/hooks) e [instalación](https://code.claude.com/docs/en/setup).

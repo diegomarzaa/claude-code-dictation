@@ -1,7 +1,7 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """Global X11 dictation through an isolated official Claude Code PTY."""
 import argparse, codecs, ctypes as C, fcntl, hashlib, json, os, pathlib, pty, re
-import select, shlex, signal, socket, struct, subprocess, sys, termios, time
+import select, shlex, shutil, signal, socket, struct, subprocess, sys, termios, time
 BASE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE / 'vendor'))
 import pyte
@@ -214,16 +214,23 @@ class Preview:
             self.root.destroy()
 
 
-def prepare(language):
+def prepare(language, source_profile):
     STATE.mkdir(mode=0o700, exist_ok=True); os.chmod(STATE, 0o700)
-    profile = STATE / 'profile'; profile.mkdir(mode=0o700, exist_ok=True)
-    credential = pathlib.Path.home() / '.claude/.credentials.json'
-    if not credential.exists(): raise RuntimeError('Inicia sesión primero con claude /login.')
+    source_profile = pathlib.Path(source_profile).expanduser().resolve()
+    profile_key = hashlib.sha256(str(source_profile).encode()).hexdigest()[:12]
+    profiles = STATE / 'profiles'; profiles.mkdir(mode=0o700, exist_ok=True)
+    profile = profiles / profile_key; profile.mkdir(mode=0o700, exist_ok=True)
+    credential = source_profile / '.credentials.json'
+    if not credential.is_file():
+        raise RuntimeError('No se encontraron credenciales de Claude. Inicia sesión con claude y comprueba --claude-config.')
     link = profile / '.credentials.json'
     if not link.exists(): link.symlink_to(credential)
     config = profile / '.claude.json'
     if not config.exists():
-        original = json.loads((pathlib.Path.home() / '.claude.json').read_text())
+        source_config = source_profile / '.claude.json'
+        if source_profile == (pathlib.Path.home() / '.claude').resolve():
+            source_config = pathlib.Path.home() / '.claude.json'
+        original = json.loads(source_config.read_text()) if source_config.is_file() else {}
         config.write_text(json.dumps({k: original[k] for k in
             ('hasCompletedOnboarding','lastOnboardingVersion','oauthAccount') if k in original}))
         config.chmod(0o600)
@@ -231,7 +238,7 @@ def prepare(language):
         'voice':{'enabled':True,'mode':'tap'}, 'disableAllHooks':False,
         'prefersReducedMotion':True, 'permissions':{'defaultMode':'dontAsk'},
         'hooks':{'UserPromptSubmit':[{'hooks':[{'type':'command',
-            'command':shlex.join(['/usr/bin/python3', str(BASE/'dictate.py'), 'hook']),
+            'command':shlex.join([sys.executable, str(BASE/'dictate.py'), 'hook']),
             'onFailure':'block'}]}]}}
     (STATE/'settings.json').write_text(json.dumps(settings))
     return profile
@@ -251,7 +258,18 @@ def prompt_text(screen):
 
 def run(args):
     if os.environ.get('XDG_SESSION_TYPE') == 'wayland': raise RuntimeError('Este puente requiere X11.')
-    profile = prepare(args.language)
+    executable = shutil.which(args.claude)
+    if executable is None:
+        raise RuntimeError('Claude no está en PATH. Instálalo o indica --claude con su ejecutable.')
+    executable = str(pathlib.Path(executable).resolve())
+    missing = [name for name in ('xclip','xprop') if shutil.which(name) is None]
+    if missing:
+        raise RuntimeError('Faltan dependencias: '+', '.join(missing)+'. Consulta los requisitos del README.')
+    try:
+        import tkinter
+    except ImportError as error:
+        raise RuntimeError('Falta Tkinter para este Python. Instala python3-tk o selecciona otro intérprete con PYTHON.') from error
+    profile = prepare(args.language, args.claude_config)
     lock = open(STATE/'bridge.lock','w')
     try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError: raise RuntimeError('El puente ya está abierto.')
@@ -274,7 +292,7 @@ def run(args):
         env.pop(k, None)
     env.update(CLAUDE_CONFIG_DIR=str(profile), CLAUDE_DICTATION_SOCKET=str(endpoint),
         DISABLE_AUTOUPDATER='1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1', TERM='xterm-256color')
-    command = [str(pathlib.Path.home()/'.local/bin/claude'), '--settings',str(STATE/'settings.json'),
+    command = [executable, '--settings',str(STATE/'settings.json'),
         '--setting-sources','','--strict-mcp-config','--mcp-config','{"mcpServers":{}}',
         '--tools','','--disable-slash-commands']
     proc = subprocess.Popen(command, cwd=STATE, env=env, stdin=slave, stdout=slave,
@@ -412,6 +430,8 @@ def main():
     parser.add_argument('--key',default='j',help='Ctrl+Alt+esta tecla (predeterminado J)')
     parser.add_argument('--live',action='store_true',help='Vista previa flotante en directo; pega solo el resultado final')
     parser.add_argument('--terminal',action='store_true',help='Usa Ctrl+Shift+V en vez de Ctrl+V')
+    parser.add_argument('--claude',default=os.environ.get('CLAUDE_BIN','claude'),help='Ejecutable de Claude (por defecto: claude en PATH)')
+    parser.add_argument('--claude-config',default=os.environ.get('CLAUDE_CONFIG_DIR',str(pathlib.Path.home()/'.claude')),help='Perfil existente con credenciales de Claude.ai (por defecto: CLAUDE_CONFIG_DIR o ~/.claude)')
     args=parser.parse_args()
     if args.command == 'run' and re.fullmatch(r'F(?:[1-9]|1[0-2])', args.key, re.I):
         parser.error('Ctrl+Alt+F1…F12 cambia de consola en Linux; usa una letra, por ejemplo --key j.')
