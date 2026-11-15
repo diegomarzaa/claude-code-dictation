@@ -1,0 +1,9 @@
+state/
+__pycache__/
+*.py[cod]
+*.log
+*.sock
+.env
+.env.*
+.credentials.json
+.claude.json
